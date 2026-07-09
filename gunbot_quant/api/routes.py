@@ -30,6 +30,7 @@ from ..config.scenarios import BASE_CONFIG
 from ..core.utils import NumpyEncoder, DataValidationError
 from ..strategies.strategy_library import STRATEGY_MAPPING
 from ..core.backtest_engine import calculate_stats
+from ..core.fxmacrodata import ENDPOINTS as FXMACRODATA_ENDPOINTS, FxMacroDataClient, FxMacroDataError
 
 # Setup basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -41,6 +42,49 @@ SCREENER_CONFIGS_DIR = 'screener_configs'
 os.makedirs(RESULTS_DIR, exist_ok=True)
 os.makedirs(SCREENER_RESULTS_DIR, exist_ok=True)
 os.makedirs(SCREENER_CONFIGS_DIR, exist_ok=True)
+
+@router.get("/fxmacrodata/endpoints")
+async def list_fxmacrodata_endpoints():
+    return {"endpoints": FXMACRODATA_ENDPOINTS}
+
+@router.post("/fxmacrodata/request")
+async def fxmacrodata_request(payload: Dict[str, Any]):
+    client = FxMacroDataClient()
+    try:
+        return client.request(
+            payload.get("endpoint", ""),
+            currency=payload.get("currency"),
+            indicator=payload.get("indicator"),
+            base=payload.get("base"),
+            quote_currency=payload.get("quote") or payload.get("quote_currency"),
+            path=payload.get("path"),
+            params=payload.get("params"),
+            body=payload.get("body"),
+        )
+    except FxMacroDataError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"FXMacroData request failed: {exc}") from exc
+
+@router.get("/fxmacrodata/macro-context")
+async def fxmacrodata_macro_context(
+    currency: str = "usd",
+    indicator: str = "non_farm_payrolls",
+    days_ahead: int = 30,
+    include_news: bool = True,
+):
+    client = FxMacroDataClient()
+    try:
+        return client.macro_context(
+            currency,
+            indicator,
+            days_ahead=days_ahead,
+            include_news=include_news,
+        )
+    except FxMacroDataError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"FXMacroData context failed: {exc}") from exc
 
 # --- NEW: Gunbot Period Matrix & Helper ---
 GUNBOT_PERIOD_MATRIX = {
