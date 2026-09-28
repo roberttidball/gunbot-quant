@@ -226,13 +226,16 @@ class FxMacroDataClient:
         params: dict[str, Any] | None = None,
         body: Any | None = None,
     ) -> Any:
+        # List endpoints page with ``limit`` (1-100, default 20) and ``offset``
+        # in ``params``; see ``pagination.has_more`` / ``next_offset``.
         query = {k: v for k, v in (params or {}).items() if v is not None}
-        if self.api_key and "api_key" not in query:
-            query["api_key"] = self.api_key
         url = f"{self.base_url}{path}"
         if self.transport:
             return self.transport(method, url, query or None, body)
-        response = self.session.request(method, url, params=query, json=body, timeout=self.timeout)
+        headers = {"X-API-Key": self.api_key} if self.api_key else None
+        response = self.session.request(
+            method, url, params=query, json=body, headers=headers, timeout=self.timeout
+        )
         response.raise_for_status()
         return response.json()
 
