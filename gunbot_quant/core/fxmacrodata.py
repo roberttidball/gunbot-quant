@@ -52,6 +52,11 @@ class FxMacroDataClient:
         self.base_url = self.base_url.rstrip("/")
         if self.api_key is None:
             self.api_key = os.getenv("FXMACRODATA_API_KEY") or os.getenv("FXMD_API_KEY")
+        key = (self.api_key or "").strip()
+        if any(ch.isspace() or not ch.isprintable() for ch in key):
+            # Never echo the key itself in the error.
+            raise FxMacroDataError("FXMacroData API key contains whitespace or control characters")
+        self.api_key = key or None
 
     def request(
         self,
@@ -233,9 +238,18 @@ class FxMacroDataClient:
         if self.transport:
             return self.transport(method, url, query or None, body)
         headers = {"X-API-Key": self.api_key} if self.api_key else None
+        # Redirects are not followed so the key is never sent to another host.
         response = self.session.request(
-            method, url, params=query, json=body, headers=headers, timeout=self.timeout
+            method,
+            url,
+            params=query,
+            json=body,
+            headers=headers,
+            timeout=self.timeout,
+            allow_redirects=False,
         )
+        if 300 <= response.status_code < 400:
+            raise FxMacroDataError(f"FXMacroData request was redirected (HTTP {response.status_code})")
         response.raise_for_status()
         return response.json()
 
